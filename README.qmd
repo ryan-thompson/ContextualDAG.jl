@@ -1,23 +1,26 @@
+---
+format: gfm
+---
+
 # ContextualLasso
 
-Julia implementation of contextual directed acyclic graphs (DAGs) from
-the paper \[‘Contextual directed acyclic graphs’\].
+Julia implementation of contextual directed acyclic graphs (DAGs) from the paper ['Contextual directed acyclic graphs'].
 
 ## Installation
 
 To install `ContextualDAG` from GitHub, run the following code:
 
-``` julia
+```{julia}
+#| eval: false
 using Pkg
 Pkg.add(url = "https://github.com/ryan-thompson/ContextualDAG.jl")
 ```
 
 ## Usage
 
-The `cdag()` function fits a contextual DAG using variables `x` and
-contextual features `z`.
+The `cdag()` function fits a contextual DAG using variables `x` and contextual features `z`.
 
-``` julia
+```{julia}
 using ContextualDAG, Graphs, Random, TikzGraphs
 
 Random.seed!(1)
@@ -38,13 +41,9 @@ w = coef(fit, z_new)
 w[:, :, 1] |> SimpleDiGraph |> plot
 ```
 
-![](README_files/figure-commonmark/cell-3-output-1.svg)
-
-``` julia
+```{julia}
 # And for another draw of z
 z_new = randn(1, m)
 w = coef(fit, z_new)
 w[:, :, 1] |> SimpleDiGraph |> plot
 ```
-
-![](README_files/figure-commonmark/cell-4-output-1.svg)
