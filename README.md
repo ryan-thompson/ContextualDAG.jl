@@ -1,4 +1,4 @@
-# ContextualLasso
+# ContextualDAG
 
 Julia implementation of contextual directed acyclic graphs (DAGs) from
 the paper \[‘Contextual directed acyclic graphs’\].
