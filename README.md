@@ -1,7 +1,8 @@
 # ContextualDAG
 
 Julia implementation of contextual directed acyclic graphs (DAGs) from
-the paper \[‘Contextual directed acyclic graphs’\].
+the paper [‘Contextual directed acyclic
+graphs’](https://arxiv.org/abs/2310.15627).
 
 ## Installation
 
