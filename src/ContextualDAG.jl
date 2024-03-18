@@ -121,16 +121,13 @@ function project_dag(w̃, params)
     s, mu, alpha, tol, max_step, max_iter, threshold = params
 
     # Save dims
-    p, _, n = size(w̃)
+    p = size(w̃, 1)
 
-    # w̃[abs.(w̃) .<= threshold] .= 0
-
+    # Compute scaling constant
     max_ = maximum(abs.(w̃), dims = (1, 2))
     max_ = ifelse.(max_ .> 0.0f0, max_, 1.0f0)
-    # max_ = ifelse.(max_ .> 1.0f0, max_, 1.0f0)
 
-    # println(sum(abs.(w̃ ./ max_)))
-
+    # Set learning rate
     lr = 1 / p
 
     # Initialise variables
@@ -145,16 +142,11 @@ function project_dag(w̃, params)
     sIw2_batch = collect(eachslice(sIw2, dims = 3))
     sIw2_inv_batch = collect(eachslice(sIw2_inv, dims = 3))
 
-    
     # Perform DAG projection
     for step in 1:max_step
 
-        iter = 0
-
         # Run gradient descent
-        for i in 1:max_iter
-
-            iter += 1
+        for iter in 1:max_iter
 
             # Compute gradients
             sIw2 .= permutedims(s * I - w .^ 2, (2, 1, 3))
@@ -171,19 +163,16 @@ function project_dag(w̃, params)
 
         end
 
-        # println(iter)
-
         # Update mu
         mu *= alpha
 
     end
 
-    # println(iter) 
-
+    # Rescale weights
     w .*= max_
 
+    # Threshold small weights
     w[abs.(w) .<= threshold] .= 0
-
     w[w .≠ 0] = w̃[w .≠ 0]
 
     w
