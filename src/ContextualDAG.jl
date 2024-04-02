@@ -211,7 +211,7 @@ function Zygote.rrule(::typeof(project), w̃; par, params, inference)
         dŵ = vec(dŵ)
         ŵ = vec(ŵ)
         if iszero(theta)
-            dw̃ = (ŵ .!= 0) .* dŵ
+            dw̃ = (ŵ .≠ 0) .* dŵ
         elseif isinf(theta)
             dw̃ = zero(dŵ)
         else
@@ -352,7 +352,7 @@ function train(model, lambda, params, x, z, x_val, z_val, optimiser, epoch_max, 
 
     # Compute validation standard errors and sparsity levels for plotting
     val_nonzero = sum(project(model(z_val), par = theta, params = params, inference = true)[1] 
-        .!= 0) / n_val
+        .≠ 0) / n_val
 
     model, theta, train_loss, val_loss, val_nonzero, epochs
 
@@ -678,13 +678,13 @@ function coef(fit::ContextualDAGFit, z::Matrix{<:Real}; lambda::Union{String, Re
     if gaurantee_dag
         for i in 1:n
             while Graphs.is_cyclic(Graphs.SimpleDiGraph(w[:, :, i]))
-                nonzero_idxs = findall(!iszero, w[:, :, i])
-                if isempty(nonzero_idxs)
+                nonzero_ind = findall(!iszero, w[:, :, i])
+                if isempty(nonzero_ind)
                     break
                 end
-                nonzero_values = [w[idx[1], idx[2], i] for idx in nonzero_idxs]
-                min_idx = argmin(abs.(nonzero_values))
-                w[nonzero_idxs[min_idx][1], nonzero_idxs[min_idx][2], i] = 0.0
+                nonzero_value = [w[idx[1], idx[2], i] for idx in nonzero_ind]
+                min_idx = argmin(abs.(nonzero_value))
+                w[nonzero_ind[min_idx][1], nonzero_ind[min_idx][2], i] = 0.0
             end
         end
     end
