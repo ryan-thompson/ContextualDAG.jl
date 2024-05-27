@@ -1,8 +1,10 @@
+
+
 # ContextualDAG
 
 Julia implementation of contextual directed acyclic graphs (DAGs) from
-the paper [‘Contextual directed acyclic
-graphs’](https://arxiv.org/abs/2310.15627).
+the paper [“Contextual directed acyclic
+graphs”](https://proceedings.mlr.press/v238/thompson24a.html).
 
 ## Installation
 
@@ -31,7 +33,7 @@ x, x_val = randn(n, p), randn(n, p) # Variables (nodes)
 z, z_val = randn(n, m), randn(n, m) # Contextual features
 
 # Fit a contextual DAG model with three hidden layers of 16 neurons each
-fit = cdag(x, z, x_val, z_val,  hidden_layers = [16, 16, 16], verbose = false)
+fit = cdag(x, z, x_val, z_val, hidden_layers = [16, 16, 16], verbose = false)
 
 # Predict for a new draw of z
 z_new = randn(1, m)

@@ -118,7 +118,7 @@ end
 function project_dag(w̃, params)
 
     # Save params
-    s, mu, alpha, tol, max_step, max_iter, threshold = params
+    s, mu, alpha, tol, max_step, max_iter, threshold, lr = params
 
     # Save dims
     p = size(w̃, 1)
@@ -126,9 +126,6 @@ function project_dag(w̃, params)
     # Compute scaling constant
     max_ = maximum(abs.(w̃), dims = (1, 2))
     max_ = ifelse.(max_ .> 0.0f0, max_, 1.0f0)
-
-    # Set learning rate
-    lr = 1 / p
 
     # Initialise variables
     w = zero(w̃)
@@ -486,7 +483,7 @@ unit variance; helps during training.
 - `params = (1, 1, 0.5, 1e-2, 10, 10000, 0.1)`: parameters for the acyclicity projection in the \
 following order: log det parameter `s`, path coefficient `μ`, decay factor `c`, convergence \
 tolerance `tol`, step count `T`, maximum gradient descent iterations `max_iter`, thresholding \
-parameter `threshold`
+parameter `threshold`, learning rate `lr`.
 - `order = nothing`: an optional topological ordering of the variables; if `nothing` the \
 topological ordering will be learned and allowed to vary with `z`.
 ``
@@ -499,7 +496,7 @@ function cdag(x::Matrix{<:Real}, z::Matrix{<:Real}, x_val::Matrix{<:Real},
     early_stop::Bool = true, patience::Integer = 10, hidden_layers::Vector{<:Any} = [128, 128], 
     initialise::String = "warm", verbose::Bool = true, verbose_freq::Integer = 1, 
     standardise_z::Bool = true, activation_fun::Function = Flux.relu, 
-    params::Tuple = (1, 1, 0.5, 1e-2, 10, 10000, 0.1), 
+    params::Tuple = (1, 1, 0.5, 1e-2, 10, 10000, 0.1, 1 / size(x, 2)), 
     order::Union{Vector{<:Int}, Nothing} = nothing)
 
     # Validate arguments
