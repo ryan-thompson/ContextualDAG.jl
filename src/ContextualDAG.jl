@@ -551,8 +551,8 @@ function cdag(x::Matrix{<:Real}, z::Matrix{<:Real}, x_val::Matrix{<:Real},
     x_val, z_val = Flux.f32(x_val), Flux.f32(z_val)
 
     # Move data to correct device
-    x, z = Flux.gpu(x), Flux.gpu(z)
-    x_val, z_val = Flux.gpu(x_val), Flux.gpu(z_val)
+    x, z = CUDA.cu(x), CUDA.cu(z)
+    x_val, z_val = CUDA.cu(x_val), CUDA.cu(z_val)
 
     # Compute lambda sequence
     if !isnothing(lambda)
@@ -617,7 +617,7 @@ function cdag(x::Matrix{<:Real}, z::Matrix{<:Real}, x_val::Matrix{<:Real},
         model_i[end - 1].bias[zero_inds] .= 0
 
         # Move model to training device
-        model_i = Flux.gpu(model_i)
+        model_i = CUDA.cu(model_i)
         
         # Initialise by training model as a simple directed graph
         if i == 1
@@ -680,7 +680,7 @@ function coef(fit::ContextualDAGFit, z::Matrix{<:Real}; lambda::Union{String, Re
     z = Flux.f32(z)
 
     # Move data to correct device
-    z = Flux.gpu(z)
+    z = CUDA.cu(z)
 
     # Find correct lambda
     if lambda == "lambda_min"
@@ -690,7 +690,7 @@ function coef(fit::ContextualDAGFit, z::Matrix{<:Real}; lambda::Union{String, Re
     end
 
     # Compute coefficients by performing a forward pass
-    model = Flux.gpu(fit.model[index_lambda])
+    model = CUDA.cu(fit.model[index_lambda])
     w = project(model(z), par = fit.theta[index_lambda], params = fit.params, inference = true)[1]
     w = Flux.cpu(w)
 
