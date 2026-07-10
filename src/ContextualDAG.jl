@@ -30,6 +30,14 @@ function early_stopping(f, delay; distance = -, init_score = 0, min_dist = 0)
 #==================================================================================================#
 
 # Adapted from https://github.com/JuliaGPU/CUDA.jl/blob/master/lib/cublas/wrappers.jl
+function matinv_batched!(A::Vector{<:AbstractMatrix}, C::Vector{<:AbstractMatrix})
+    length(A) == length(C) || throw(DimensionMismatch("input and output batches must match"))
+    for (A_i, C_i) in zip(A, C)
+        C_i .= inv(A_i)
+    end
+    nothing
+end
+
 for (fname1, fname2, elty) in
     ((:cublasDgetrfBatched, :cublasDgetriBatched, :Float64),
      (:cublasSgetrfBatched, :cublasSgetriBatched, :Float32),
@@ -42,30 +50,44 @@ for (fname1, fname2, elty) in
             n = size(A[1], 1)
             lda = max(1, stride(A[1], 2))
             ldc = max(1, stride(C[1], 2))
-            Aptrs = CUDA.CUBLAS.unsafe_batch(A)
-            Cptrs = CUDA.CUBLAS.unsafe_batch(C)
+            Aptrs = CUDA.cuBLAS.unsafe_batch(A)
+            Cptrs = CUDA.cuBLAS.unsafe_batch(C)
             info = CUDA.zeros(Cint, batchSize)
-            CUDA.CUBLAS.$fname1(CUDA.CUBLAS.handle(), n, Aptrs, lda, CUDA.CU_NULL, info, batchSize)
-            CUDA.CUBLAS.$fname2(CUDA.CUBLAS.handle(), n, Aptrs, lda, CUDA.CU_NULL, Cptrs, ldc, info,
+            CUDA.cuBLAS.$fname1(CUDA.cuBLAS.handle(), n, Aptrs, lda, CUDA.CU_NULL, info, batchSize)
+            CUDA.cuBLAS.$fname2(CUDA.cuBLAS.handle(), n, Aptrs, lda, CUDA.CU_NULL, Cptrs, ldc, info,
                 batchSize)
-            CUDA.CUBLAS.unsafe_free!(Aptrs)
-            CUDA.CUBLAS.unsafe_free!(Cptrs)
+            CUDA.cuBLAS.unsafe_free!(Aptrs)
+            CUDA.cuBLAS.unsafe_free!(Cptrs)
         end
     end
 end
 
-function xw_mult(w; x)
+function xw_mult(w::AbstractArray; x)
     p, n = size(x)
-    reshape(CUDA.CUBLAS.gemm_strided_batched('T', 'T', 1, w, reshape(x, 1, :, n)), p, n)
+    reshape(sum(w .* reshape(x, p, 1, n), dims = 1), p, n)
+end
+
+function xw_mult(w::CUDA.AnyCuArray; x)
+    p, n = size(x)
+    reshape(CUDA.cuBLAS.gemm_strided_batched('T', 'T', 1, w, reshape(x, 1, :, n)), p, n)
+end
+
+function xw_mult_pullback(dy, x)
+    p, n = size(x)
+    reshape(x, p, 1, n) .* reshape(dy, 1, p, n)
+end
+
+function xw_mult_pullback(dy, x::CUDA.AnyCuArray)
+    p, n = size(x)
+    dw = CUDA.cuBLAS.gemm_strided_batched('N', 'T', 1.0, reshape(dy, p, 1, n),
+        reshape(x, p, 1, n))
+    permutedims(dw, (2, 1, 3))
 end
 
 function Zygote.rrule(::typeof(xw_mult), w; x)
     y = xw_mult(w; x)
     function y_pullback(dy)
-        p, n = size(x)
-        dw = CUDA.CUBLAS.gemm_strided_batched('N', 'T', 1.0, reshape(dy, p, 1, n), 
-            reshape(x, p, 1, n))
-        dw = permutedims(dw, (2, 1, 3))
+        dw = xw_mult_pullback(dy, x)
         (Zygote.NoTangent(), dw)
     end
     y, y_pullback
@@ -98,7 +120,8 @@ function project_l1(w, lambda)
     ind = sortperm(w_abs, rev = true)
     w_sort = w_abs[ind]
     csum = cumsum(w_sort)
-    indices = Flux.gpu(collect(1:prod(dims)))
+    indices = similar(vec(w), Int, prod(dims))
+    indices .= 1:prod(dims)
     max_j = maximum((w_sort .* indices .> csum .- nlambda) .* indices)
     theta = (sum(w_sort[1:max_j]) - nlambda) / max_j
 
@@ -217,7 +240,7 @@ function Zygote.rrule(::typeof(project), w̃; par, params, inference)
             dw̃ =  A .* dŵ .- alpha .* sign.(ŵ)
         end
         dw̃ = reshape(dw̃, dims)
-        (Zygote.NoTangent(), dw̃, Zygote.NoTangent())
+        (Zygote.NoTangent(), dw̃)
     end
 
     (ŵ, theta), ŵ_pullback
@@ -476,23 +499,22 @@ produces a network with two hidden dense layers of 128 neurons each.
 using the previous solution along the regularisation path or `"cold"` to cold start the optimiser \
 with a random initialisation.
 - `verbose = true`: whether to print status updates during training.
-- `verbose_freq = 10`: the number of epochs to wait between status updates.
+- `verbose_freq = 1`: the number of epochs to wait between status updates.
 - `standardise_z = true`: whether to standardise the contextual features to have zero mean and \
 unit variance; helps during training.
 - `activation_fun = Flux.relu`: an activation function to use in the hidden layers.
-- `params = (1, 1, 0.5, 1e-2, 10, 10000, 0.1)`: parameters for the acyclicity projection in the \
+- `params = (1, 1, 0.5, 1e-2, 10, 10000, 0.1, 1 / size(x, 2))`: parameters for the acyclicity \
+projection in the \
 following order: log det parameter `s`, path coefficient `μ`, decay factor `c`, convergence \
 tolerance `tol`, step count `T`, maximum gradient descent iterations `max_iter`, thresholding \
 parameter `threshold`, learning rate `lr`.
 - `order = nothing`: an optional topological ordering of the variables; if `nothing` the \
 topological ordering will be learned and allowed to vary with `z`.
-``
-
 See also [`coef`](@ref).
 """
 function cdag(x::Matrix{<:Real}, z::Matrix{<:Real}, x_val::Matrix{<:Real}, 
     z_val::Matrix{<:Real}; lambda::Union{Real, Vector{<:Real}, Nothing} = nothing, 
-    lambda_n::Int = 20, optimiser::DataType = Flux.Adam, epoch_max::Integer = 10000, 
+    lambda_n::Int = 20, optimiser = Flux.Adam, epoch_max::Integer = 10000,
     early_stop::Bool = true, patience::Integer = 10, hidden_layers::Vector{<:Any} = [128, 128], 
     initialise::String = "warm", verbose::Bool = true, verbose_freq::Integer = 1, 
     standardise_z::Bool = true, activation_fun::Function = Flux.relu, 
@@ -591,7 +613,8 @@ function cdag(x::Matrix{<:Real}, z::Matrix{<:Real}, x_val::Matrix{<:Real},
         end
 
         # Zero-out weights corresponding to diagonal elements (ensures diagonal elements are zero)
-        Flux.params(model_i[end - 1])[1][zero_inds, :] .= 0
+        model_i[end - 1].weight[zero_inds, :] .= 0
+        model_i[end - 1].bias[zero_inds] .= 0
 
         # Move model to training device
         model_i = Flux.gpu(model_i)
